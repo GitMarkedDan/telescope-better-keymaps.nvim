@@ -71,7 +71,7 @@ return require("telescope").register_extension({
 
             local function test_keymap(keymap, do_plug_check)
                 do_plug_check = do_plug_check or not opts.show_plug
-                local keymap_key = keymap.buffer .. keymap.mode .. keymap.lhs -- should be distinct for every keymap
+                local keymap_key = keymap.mode .. keymap.lhs
                 if not keymap_encountered[keymap_key] then
                     keymap_encountered[keymap_key] = true
                     if (not opts.lhs_filter or opts.lhs_filter(keymap.lhs)) and (not opts.filter or opts.filter(keymap)) then
@@ -95,12 +95,10 @@ return require("telescope").register_extension({
                     if type(keymap.lhs) == "table" then
                         for _, keymap_type in ipairs(keymap) do
                             local temp_keymap = shallow_copy(keymap)
-                            temp_keymap.buffer = FAKE_BUF
                             temp_keymap.lhs = keymap_type
                             test_keymap(temp_keymap)
                         end
                     else
-                        keymap.buffer = FAKE_BUF
                         test_keymap(keymap)
                     end
                 end
@@ -125,7 +123,6 @@ return require("telescope").register_extension({
                     end
                     local temp_keymap = shallow_copy(keymap)
                     temp_keymap.lhs = plug_dict[keymap.lhs]
-                    temp_keymap.buffer = ""
                     test_keymap(temp_keymap, false)
                 else
                     test_keymap(keymap)
