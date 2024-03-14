@@ -56,8 +56,8 @@ return require("telescope").register_extension({
     exports = {
         _picker = function(opts)
             opts = opts or {}
-
-            opts.modes = vim.F.if_nil(opts.modes, { "n", "i", "c", "x" })
+            -- excess, but works
+            opts.modes = vim.F.if_nil(opts.modes, { "i", "v", "x", "s", "!", "c", "t", "l", "o", "n" })
             opts.show_plug = vim.F.if_nil(opts.show_plug, false)
             opts.only_buf = vim.F.if_nil(opts.only_buf, false)
 
