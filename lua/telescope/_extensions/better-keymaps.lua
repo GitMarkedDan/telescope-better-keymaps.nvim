@@ -50,8 +50,6 @@ local function load_lazy_nvim_keys()
     end
 end
 
-local FAKE_BUF = "<Plug>"
-
 return require("telescope").register_extension({
     exports = {
         _picker = function(opts)
@@ -61,34 +59,49 @@ return require("telescope").register_extension({
             opts.show_plug = vim.F.if_nil(opts.show_plug, false)
             opts.only_buf = vim.F.if_nil(opts.only_buf, false)
 
+            local cached_keymaps_with_plug = {}
             local plug_dict = {}
-            local cached_plugs = {}
-            local keymap_encountered = {} -- used to make sure no duplicates are inserted into keymaps_table
+            local keymap_added = {} -- used to make sure no duplicates are inserted into keymaps_table
             local keymaps_table = {}
             local max_len_lhs = 0
 
             local lazy_data = opts.use_lazy and load_lazy_nvim_keys() or {}
 
-            local function test_keymap(keymap, do_plug_check)
-                do_plug_check = do_plug_check or not opts.show_plug
-                local keymap_key = keymap.mode .. keymap.lhs
-                if not keymap_encountered[keymap_key] then
-                    keymap_encountered[keymap_key] = true
-                    if (not opts.lhs_filter or opts.lhs_filter(keymap.lhs)) and (not opts.filter or opts.filter(keymap)) then
-                        if do_plug_check and string.find(keymap.lhs, "<Plug>") then
-                            table.insert(cached_plugs, keymap)
-                        elseif do_plug_check and keymap.rhs and string.find(keymap.rhs, "<Plug>") then
-                            plug_dict[keymap.rhs] = keymap.lhs
+            local function raw_insert_keymap(keymap)
+                table.insert(keymaps_table, keymap)
+                max_len_lhs = math.max(max_len_lhs, #utils.display_termcodes(keymap.lhs))
+                keymap_added[keymap.mode .. ";;" .. keymap.lhs] = true
+            end
+
+            local function process_keymap(keymap)
+                if keymap_added[keymap.mode .. ";;" .. keymap.lhs] then
+                    return
+                elseif (opts.filter and not opts.filter(keymap)) then
+                    return
+                elseif (opts.lhs_filter and not opts.lhs_filter(keymap.lhs)) then
+                    return
+                end
+
+                if not keymap.desc and lazy_data[keymap.lhs] then
+                    keymap.desc = lazy_data[keymap].desc
+                end
+
+                if not opts.show_plug then
+                    if string.find(keymap.lhs, "<Plug>") then
+                        if not keymap.rhs then
+                            plug_dict[keymap.lhs] = function() end
                         else
-                            if not keymap.desc and lazy_data[keymap.lhs] then
-                                keymap.desc = lazy_data[keymap].desc
-                            end
-                            table.insert(keymaps_table, keymap)
-                            max_len_lhs = math.max(max_len_lhs, #utils.display_termcodes(keymap.lhs))
+                            plug_dict[keymap.lhs] = keymap.rhs
                         end
+                        return
+                    elseif keymap.rhs and string.find(keymap.rhs, "<Plug>") then
+                        return table.insert(cached_keymaps_with_plug, keymap)
                     end
                 end
+
+                raw_insert_keymap(keymap)
             end
+
 
             for _, keymap in pairs(defaults) do
                 if list_contains(opts.modes, keymap.mode) then
@@ -96,37 +109,36 @@ return require("telescope").register_extension({
                         for _, keymap_type in ipairs(keymap) do
                             local temp_keymap = shallow_copy(keymap)
                             temp_keymap.lhs = keymap_type
-                            test_keymap(temp_keymap)
+                            process_keymap(temp_keymap)
                         end
                     else
-                        test_keymap(keymap)
+                        process_keymap(keymap)
                     end
                 end
             end
 
             for _, mode in pairs(opts.modes) do
                 for _, keymap in pairs(vim.api.nvim_buf_get_keymap(0, mode)) do
-                    test_keymap(keymap)
+                    process_keymap(keymap)
                 end
                 if not opts.only_buf then
                     for _, keymap in pairs(vim.api.nvim_get_keymap(mode)) do
-                        test_keymap(keymap)
+                        process_keymap(keymap)
                     end
                 end
             end
 
             -- this will be nil if plug is not true, so its just fine if we loop through
-            for _, keymap in ipairs(cached_plugs) do
-                if plug_dict[keymap.lhs] then
+            for _, keymap in ipairs(cached_keymaps_with_plug) do
+                local plug_code = keymap.rhs
+                if plug_dict[plug_code] then
                     if not keymap.desc then
-                        keymap.desc = string.sub(keymap.lhs, 7, -1)
+                        keymap.desc = "Unknown plug cmd: " .. plug_code
                     end
-                    local temp_keymap = shallow_copy(keymap)
-                    temp_keymap.lhs = plug_dict[keymap.lhs]
-                    test_keymap(temp_keymap, false)
-                else
-                    test_keymap(keymap)
+                    keymap.rhs = plug_dict[plug_code]
+                    raw_insert_keymap(keymap)
                 end
+                raw_insert_keymap(keymap)
             end
 
             opts.width_lhs = max_len_lhs + 1
