@@ -56,8 +56,8 @@ return require("telescope").register_extension({
     exports = {
         _picker = function(opts)
             opts = opts or {}
-
-            opts.modes = vim.F.if_nil(opts.modes, { "n", "i", "c", "x" })
+            -- excess, but works
+            opts.modes = vim.F.if_nil(opts.modes, { "i", "v", "x", "s", "!", "c", "t", "l", "o", "n" })
             opts.show_plug = vim.F.if_nil(opts.show_plug, false)
             opts.only_buf = vim.F.if_nil(opts.only_buf, false)
 
@@ -71,7 +71,7 @@ return require("telescope").register_extension({
 
             local function test_keymap(keymap, do_plug_check)
                 do_plug_check = do_plug_check or not opts.show_plug
-                local keymap_key = keymap.buffer .. keymap.mode .. keymap.lhs -- should be distinct for every keymap
+                local keymap_key = keymap.mode .. keymap.lhs
                 if not keymap_encountered[keymap_key] then
                     keymap_encountered[keymap_key] = true
                     if (not opts.lhs_filter or opts.lhs_filter(keymap.lhs)) and (not opts.filter or opts.filter(keymap)) then
@@ -95,12 +95,10 @@ return require("telescope").register_extension({
                     if type(keymap.lhs) == "table" then
                         for _, keymap_type in ipairs(keymap) do
                             local temp_keymap = shallow_copy(keymap)
-                            temp_keymap.buffer = FAKE_BUF
                             temp_keymap.lhs = keymap_type
                             test_keymap(temp_keymap)
                         end
                     else
-                        keymap.buffer = FAKE_BUF
                         test_keymap(keymap)
                     end
                 end
@@ -117,6 +115,7 @@ return require("telescope").register_extension({
                 end
             end
 
+            -- this will be nil if plug is not true, so its just fine if we loop through
             for _, keymap in ipairs(cached_plugs) do
                 if plug_dict[keymap.lhs] then
                     if not keymap.desc then
@@ -124,7 +123,6 @@ return require("telescope").register_extension({
                     end
                     local temp_keymap = shallow_copy(keymap)
                     temp_keymap.lhs = plug_dict[keymap.lhs]
-                    temp_keymap.buffer = ""
                     test_keymap(temp_keymap, false)
                 else
                     test_keymap(keymap)
@@ -144,12 +142,35 @@ return require("telescope").register_extension({
                     actions.select_default:replace(function()
                         local selection = action_state.get_selected_entry()
                         if selection == nil then
-                            utils.__warn_no_selection "builtin.keymaps"
+                            utils.__warn_no_selection("better-keymaps")
                             return
                         end
-
-                        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(selection.value.lhs, true, false, true), "t", true)
-                        return actions.close(prompt_bufnr)
+                        actions.close(prompt_bufnr)
+                        local keys = selection.value.lhs
+                        if selection.value.incomplete then
+                            keys = keys:gsub("{c}", function()
+                                vim.print("Input any character: ")
+                                return vim.fn.getcharstr()
+                            end)
+                            keys = keys:gsub("{n}", function()
+                                vim.print("Input a number (0-9): ")
+                                local input = tostring(tonumber(vim.fn.getcharstr()))
+                                if not input then
+                                    error("Not a valid number!")
+                                end
+                                return input
+                            end)
+                            keys = keys:gsub("{r}", function()
+                                vim.print("Input a register (0-9)/(a-Z)/(*+:.%#=*+_/): ")
+                                local input = vim.fn.getcharstr()
+                                if not input:match("[0-9a-Z*+:.%#=*+_/]") then
+                                    error("Not a valid register!")
+                                end
+                                return input
+                            end)
+                            keys:gsub("{P}", "")
+                        end
+                        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "t", true)
                     end)
                     return true
                 end,
