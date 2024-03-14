@@ -38,12 +38,12 @@ local function load_lazy_nvim_keys()
     local LazyNvimConfig = require('lazy.core.config')
     local Handler = require('lazy.core.handler')
     for _, plugin in pairs(LazyNvimConfig.plugins) do
-        local keys = Handler.handlers.keys:values(plugin)
+        local keys = vim.tbl_get(plugin or {}, "_", "handlers", "keys") or {}
         for _, keymap in pairs(keys) do
             if keymap.desc and #keymap.desc > 0 then
                 lazy_keymaps[keymap[1]] = {
                     desc = keymap.desc,
-                    mode = keymap.mode, ---@type string|string[]|nil
+                    mode = keymap.mode,
                 }
             end
         end
@@ -80,7 +80,7 @@ return require("telescope").register_extension({
                         elseif do_plug_check and keymap.rhs and string.find(keymap.rhs, "<Plug>") then
                             plug_dict[keymap.rhs] = keymap.lhs
                         else
-                            if not keymap.desc and lazy_data[keymap.desc] then
+                            if not keymap.desc and lazy_data[keymap.lhs] then
                                 keymap.desc = lazy_data[keymap].desc
                             end
                             table.insert(keymaps_table, keymap)
