@@ -9,3 +9,7 @@ A simple plugin for NeoVim that mimics Telescope's default keymaps picker, but c
 # Installation
 
 (TODO)
+
+# WARNING
+
+Use this plugin at your own risk! It is very incomplete and has put on hold until further notice!
